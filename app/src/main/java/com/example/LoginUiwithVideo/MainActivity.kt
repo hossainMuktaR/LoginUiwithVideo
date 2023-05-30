@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun getVideoUri(): Uri {
-        val rawId = resources.getIdentifier("clouds", "raw",packageName)
+        val rawId = resources.getIdentifier("sky_daniel", "raw",packageName)
         val videoUri = "android.resource://$packageName/$rawId"
         return Uri.parse(videoUri)
     }
@@ -92,6 +92,7 @@ private fun Context.buildExoPlayer(uri: Uri): ExoPlayer =
         setMediaItem(MediaItem.fromUri(uri))
         repeatMode = Player.REPEAT_MODE_ALL
         playWhenReady = true
+        volume = 0f
         prepare()
     }
 private fun Context.buildPlayerView(exoPlayer: ExoPlayer): StyledPlayerView =
