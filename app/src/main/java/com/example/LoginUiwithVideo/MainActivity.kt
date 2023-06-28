@@ -3,12 +3,14 @@ package com.example.LoginUiwithVideo
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +36,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +59,8 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.LoginUiwithVideo.ui.theme.LoginUiwithVideo
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.accompanist.insets.navigationBarsWithImePadding
@@ -80,8 +86,9 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     private fun getVideoUri(): Uri {
-        val rawId = resources.getIdentifier("sky_daniel", "raw",packageName)
+        val rawId = resources.getIdentifier("sky_daniel", "raw", packageName)
         val videoUri = "android.resource://$packageName/$rawId"
         return Uri.parse(videoUri)
     }
@@ -95,14 +102,16 @@ private fun Context.buildExoPlayer(uri: Uri): ExoPlayer =
         volume = 0f
         prepare()
     }
+
 private fun Context.buildPlayerView(exoPlayer: ExoPlayer): StyledPlayerView =
-    StyledPlayerView(this).apply{
+    StyledPlayerView(this).apply {
         player = exoPlayer
         layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
         useController = false
         resizeMode = RESIZE_MODE_ZOOM
     }
-private fun Context.doLogin(){
+
+private fun Context.doLogin() {
     Toast.makeText(
         this,
         "Something went Wrong, try again later!",
@@ -113,69 +122,96 @@ private fun Context.doLogin(){
 @Composable
 fun Login(videoUri: Uri) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val passwordFocusRequester = FocusRequester()
     val focusManager = LocalFocusManager.current
     val exoPlayer = remember {
         context.buildExoPlayer(videoUri)
     }
-    DisposableEffect(
-        AndroidView(factory = { it.buildPlayerView(exoPlayer) },
-        modifier = Modifier.fillMaxSize())
-    ){
+    var lifecycle by remember {
+        mutableStateOf(Lifecycle.Event.ON_CREATE)
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver{_,event ->
+            lifecycle = event
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            exoPlayer.release()
-            Toast.makeText(
-                context,
-                "dispose effect close",
-                Toast.LENGTH_SHORT
-            ).show()
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
+//    exoPlayer implementation on compose
+    AndroidView(
+        factory = {
+            Log.d("thisTag", "factory executed")
+            it.buildPlayerView(exoPlayer)
+        },
+        update ={
+                when(lifecycle){
+                    Lifecycle.Event.ON_PAUSE ->{
+                        Log.d("thisTag", "Player Pause")
+                        it.onPause()
+                        it.player?.pause()
+                    }
+                    Lifecycle.Event.ON_RESUME ->{
+                        Log.d("thisTag", "Player Resumed")
+                        it.onResume()
+                    }
+                    else -> Unit
+                }
+        },
+        modifier = Modifier.fillMaxSize()
+    )
+
     ProvideWindowInsets {
-    Column(
-        modifier = Modifier
-            .navigationBarsWithImePadding()
-            .padding(24.dp)
-            .fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp, alignment = Alignment.Bottom),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.logo),
-            null,
-            Modifier.size(80.dp),
-            tint = Color.White
-        )
-        TextInput(InputType.Name, keyboardActoins = KeyboardActions(onNext = {
-            passwordFocusRequester.requestFocus()
-        }))
-        TextInput(InputType.Password, keyboardActoins = KeyboardActions( onDone = {
-            focusManager.clearFocus()
-            context.doLogin()
-        }), focusRequester = passwordFocusRequester)
-        Button(onClick = {
-                         context.doLogin()
-        }, modifier = Modifier.fillMaxWidth()) {
-            Text("SIGN IN", modifier = Modifier.padding(vertical = 8.dp))
-        }
-        Divider(
-            color = Color.White.copy(alpha = 0.3f),
-            thickness = 1.dp,
-            modifier = Modifier.padding(top = 48.dp)
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Don't Have an Account?", color = Color.White)
-            TextButton(onClick = {}) {
-                Text("SIGN UP")
+        Column(
+            modifier = Modifier
+                .navigationBarsWithImePadding()
+                .padding(24.dp)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp, alignment = Alignment.Bottom),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.logo),
+                null,
+                Modifier.size(80.dp),
+                tint = Color.White
+            )
+            TextInput(InputType.Name, keyboardActoins = KeyboardActions(onNext = {
+                passwordFocusRequester.requestFocus()
+            }))
+            TextInput(InputType.Password, keyboardActoins = KeyboardActions(onDone = {
+                focusManager.clearFocus()
+                context.doLogin()
+            }), focusRequester = passwordFocusRequester)
+            Button(onClick = {
+                context.doLogin()
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("SIGN IN", modifier = Modifier.padding(vertical = 8.dp))
+            }
+            Divider(
+                color = Color.White.copy(alpha = 0.3f),
+                thickness = 1.dp,
+                modifier = Modifier.padding(top = 48.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Don't Have an Account?", color = Color.White)
+                TextButton(onClick = {}) {
+                    Text("SIGN UP")
+                }
             }
         }
-    }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TextInput(inputType: InputType,focusRequester: FocusRequester? = null, keyboardActoins: KeyboardActions) {
+fun TextInput(
+    inputType: InputType,
+    focusRequester: FocusRequester? = null,
+    keyboardActoins: KeyboardActions
+) {
     var value by remember { mutableStateOf("") }
 
     TextField(
@@ -185,7 +221,7 @@ fun TextInput(inputType: InputType,focusRequester: FocusRequester? = null, keybo
             .fillMaxWidth()
             .focusRequester(focusRequester ?: FocusRequester()),
         leadingIcon = { Icon(imageVector = inputType.icon, contentDescription = null) },
-        label = {Text(inputType.label)},
+        label = { Text(inputType.label) },
         shape = ShapeDefaults.Small.copy(CornerSize(50)),
         colors = TextFieldDefaults.textFieldColors(
             textColor = Color.Black,
